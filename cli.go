@@ -3,14 +3,13 @@ package semvertag
 import (
 	"fmt"
 	"io"
-	"log"
 
 	"github.com/manifoldco/promptui"
 	git "gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
-func Prompt(msg string) {
+func Prompt(msg string) bool {
 
 	prompt := promptui.Prompt{
 		Label:     msg,
@@ -19,9 +18,7 @@ func Prompt(msg string) {
 	}
 
 	_, err := prompt.Run()
-	if err != nil {
-		log.Fatalf("Operation aborted.")
-	}
+	return err == nil
 }
 
 func PromptString(msg string) (string, error) {

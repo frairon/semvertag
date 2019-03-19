@@ -36,6 +36,10 @@ var (
 	printLast = pflag.Int("print-last", 5, "Print last n tags for information")
 )
 
+const (
+	dateFormat = "2006-01-02 15:04:05Z07"
+)
+
 func checkArgs() {
 	var argsSet int
 	if *patch {
@@ -62,6 +66,8 @@ func checkArgs() {
 }
 
 func main() {
+	log.SetFlags(0)
+	log.SetPrefix("> ")
 	pflag.Parse()
 
 	checkArgs()
@@ -84,10 +90,7 @@ func main() {
 		log.Fatalf("Error opening directory %s as repository: %v", dir, err)
 	}
 	if !*noFetch {
-		err := r.Fetch(&git.FetchOptions{
-			Tags: git.AllTags,
-		})
-		if err != nil && err != git.NoErrAlreadyUpToDate {
+		if err = semvertag.Execute(dir, "git", "fetch", "--tags"); err != nil {
 			log.Fatalf("Error fetching new version of repo")
 		}
 	}
@@ -97,7 +100,7 @@ func main() {
 	if *printLast > 0 {
 		log.Printf("Last %d tags with matching pattern:", *printLast)
 		for _, tag := range tags {
-			log.Printf("  %s > %s @ %s by %s", tag.Tag.Name, tag.Tag.Hash.String(), tag.Tag.Tagger.When, tag.Tag.Tagger.Name)
+			log.Printf("  %s   %s (%s by %s)", tag.Tag.Name, tag.Tag.Hash.String()[:6], tag.Tag.Tagger.When.Format(dateFormat), tag.Tag.Tagger.Name)
 		}
 	}
 
@@ -151,7 +154,6 @@ func main() {
 	}
 
 	newTagName := fmt.Sprintf("%sv%s", tagPrefix, lastVersion.String())
-
 	author, cfgReadErr := semvertag.ReadConfig(r)
 	if cfgReadErr != nil {
 		log.Printf("Error reading config to get author information: %v", err)
@@ -191,7 +193,11 @@ func main() {
 	}
 
 	if !*quiet {
-		semvertag.Prompt(fmt.Sprintf("Will create tag %s on %s, %s(%s) with message '%s'", newTagName, branchName, author.Username, author.Email, msg))
+		ok := semvertag.Prompt(fmt.Sprintf("Will create tag %s on %s, %s(%s) with message '%s'", newTagName, branchName, author.Username, author.Email, msg))
+		if !ok {
+			log.Printf("Aborted.")
+			return
+		}
 	}
 
 	_, err = r.CreateTag(newTagName, commitToTag, &git.CreateTagOptions{
@@ -205,6 +211,10 @@ func main() {
 
 	if err != nil {
 		log.Fatalf("Error creating tag: %v", err)
+	}
+
+	if !*noPush {
+		semvertag.Execute(dir, "git", "push", "origin", newTagName)
 	}
 
 	log.Printf("done.")
